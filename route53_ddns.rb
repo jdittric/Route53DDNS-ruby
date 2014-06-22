@@ -7,13 +7,14 @@
 # and author assumes no responsibility if you misuse it and get throttled at Aamazon Route53
 # there shall be a file with AWS secrets in JSON format, inspired by dnscurl to hide your secrets
 # from command line
-# ex:
+#
+# create a file with your AWS credentials:
 #{
 #  "access_key" : "SOME_NON_SECRET",
 #  "secret_key" : "SOME_SECRET"
 #}
-# there shall be a file with hosted zone(s) in JSON format
-# ex:
+#
+# create a file with hosted zone(s) in JSON format:
 #{
 #  "name":"ZONE_ID",
 #  "name":"ZONE_ID"
@@ -24,7 +25,6 @@
 # ./route53_ddns.rb --secrets-file /path/r53_secrets.json --hosted-zones /path/r53_zones.json --random-sleep
 
 require 'rubygems'
-# required to do requests to external servers to figure out external IP address
 require 'curb'
 require 'json'
 require 'optparse'
@@ -175,6 +175,7 @@ def get_A_record (r53, hzid)
   records[0]
 end
 
+#TODO support mail records in the format of '10 subdomain.domain.tld', e.g., mail.example.com
 def get_MX_record (r53, hzid)
   zones = r53.get_zones
   # /hostedzone/[HZID]
@@ -194,7 +195,6 @@ def get_MX_record (r53, hzid)
   records[0]
 end
 
-#TODO: multiple CNAME records in the zone
 def get_CNAME_record (r53, hzid)
   zones = r53.get_zones
   # /hostedzone/[HZID]
@@ -206,12 +206,8 @@ def get_CNAME_record (r53, hzid)
   end
 
   records = the_zone[0].get_records('CNAME')
-  if (records.size() != 1)
-    puts "It is assumed that only one CNAME record exists in HZ to update"
-    exit 1
-  end
-  #TODO: return an array to iterate through update() calls
-  records[0]
+  # return an array to iterate through update() calls
+  return records
 end
 
 
@@ -234,9 +230,12 @@ def update_ip (r53, hzid, ip)
   mx_rec = get_MX_record(r53, hzid)
   mx_rec.update(nil, nil, nil, ["10 #{ip}"]) unless mx_rec.nil?
 
-  puts "Updating zone CNAME (wildcard '*.domain.tld') record"
+  puts "Updating zone CNAME (e.g., subdomain alias or wildcard '*.domain.tld') record"
   cname_rec = get_CNAME_record(r53, hzid)
-  cname_rec.update(nil, nil, nil, [ip]) unless cname_rec.nil?
+  # iterate through the array of CNAME records
+  cname_rec.each do |rec|
+    rec.update(nil, nil, nil, [ip]) unless cname_rec.nil?
+  end
 end
 
 options = get_cli_options(ARGV)
