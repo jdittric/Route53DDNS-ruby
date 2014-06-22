@@ -15,8 +15,11 @@
 # there shall be a file with hosted zone(s) in JSON format
 # ex:
 #{
-#  "name":"id"
+#  "name":"ZONE_ID",
+#  "name":"ZONE_ID"
 #}
+# the name label is purely cosmetic and for logging purposes.
+#
 # launch parameters:
 # ./route53_ddns.rb --secrets-file /path/r53_secrets.json --hosted-zones /path/r53_zones.json --random-sleep
 
@@ -151,7 +154,7 @@ end
 # assuming that target HostedZone contains only one A record
 # otherwise this script is not what you are looking for
 
-#TODO: write a generalize method to deal with {A,MX,CNAME} record type
+#TODO: write a generalized method to deal with {A,MX,CNAME} record type
 
 def get_A_record (r53, hzid)
   zones = r53.get_zones
@@ -160,7 +163,7 @@ def get_A_record (r53, hzid)
 
   if the_zone.nil? or the_zone.size != 1
     puts "Cannot find hosted zone"
-    exit 1
+    return nil
   end
 
   records = the_zone[0].get_records('A')
@@ -179,7 +182,7 @@ def get_MX_record (r53, hzid)
 
   if the_zone.nil? or the_zone.size != 1
     puts "Cannot find hosted zone"
-    exit 1
+    return nil
   end
 
   records = the_zone[0].get_records('MX')
@@ -199,7 +202,7 @@ def get_CNAME_record (r53, hzid)
 
   if the_zone.nil? or the_zone.size != 1
     puts "Cannot find hosted zone"
-    exit 1
+    return nil
   end
 
   records = the_zone[0].get_records('CNAME')
@@ -207,7 +210,7 @@ def get_CNAME_record (r53, hzid)
     puts "It is assumed that only one CNAME record exists in HZ to update"
     exit 1
   end
-
+  #TODO: return an array to iterate through update() calls
   records[0]
 end
 
@@ -221,12 +224,19 @@ def get_previous_ip(r53, hzid)
 end
 
 def update_ip (r53, hzid, ip)
+
+  #get_<type>_record calls will return nil if the hosted zone ID is not found.
   puts "Updating zone A record."
-  get_A_record(r53, hzid).update(nil, nil, nil, [ip])
+  a_rec = get_A_record(r53, hzid)
+  a_rec.update(nil, nil, nil, [ip]) unless a_rec.nil?
+  
   puts "Updating zone MX record."
-  get_MX_record(r53, hzid).update(nil, nil, nil, ["10 #{ip}"])
+  mx_rec = get_MX_record(r53, hzid)
+  mx_rec.update(nil, nil, nil, ["10 #{ip}"]) unless mx_rec.nil?
+
   puts "Updating zone CNAME (wildcard '*.domain.tld') record"
-  get_CNAME_record(r53, hzid).update(nil, nil, nil, [ip])
+  cname_rec = get_CNAME_record(r53, hzid)
+  cname_rec.update(nil, nil, nil, [ip]) unless cname_rec.nil?
 end
 
 options = get_cli_options(ARGV)
@@ -262,7 +272,7 @@ r53 = Route53::Connection.new(secrets["access_key"], secrets["secret_key"], $API
 zones.each_pair do |key, value|
 
   previous_ip = get_previous_ip(r53, value)
-  puts "IP was #{previous_ip}"
+  puts "#{key} IP was #{previous_ip}"
 
   if previous_ip == my_ip
     puts "Nothing to do."
