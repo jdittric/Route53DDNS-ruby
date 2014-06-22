@@ -6,21 +6,28 @@ Ruby script to use Route53 as dynamic DNS provider.
 
 = Installation =
 * gem install bundle
-* git clone git://github.com/dreamins/Route53DDNS-ruby.git
+* git clone git://github.com/jdittric/Route53DDNS-ruby.git
 * cd Route53DDNS-ruby
 * bundle install
 
 = Usage =
 
-Create file with AWS secrets somewhere
-ex:
+Create JSON file containing AWS credentials hash:
+
 {
-    "access_key" : "your access key",
-    "secret_key" : "your secret key"
+  "access_key" : "your access key",
+  "secret_key" : "your secret key"
+}
+
+Create JSON file containing domain name and hosted zone ID:
+
+{
+  "name":"id",
+  "name":"id"
 }
 
 launch with cron
 crontab -e
-*/5 * * * * /usr/bin/env /path_to/route53_ddns.rb --secrets-file /path_to/.your_aws_secrets --hosted-zone [your hosted zone] --random-sleep > /path_to_log/route53.log 2>&1
+*/5 * * * * /usr/bin/env /path_to/route53_ddns.rb -s /path_to/aws_credentials.json -z hosted_zones.json --random-sleep > /path_to_log/route53.log 2>&1
 
 Please note, if you poll untrusted sources for IP they might lead your website to a wrong destination :)
