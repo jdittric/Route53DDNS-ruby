@@ -23,6 +23,7 @@
 #
 # launch parameters:
 # ./route53_ddns.rb --secrets-file /path/r53_secrets.json --hosted-zones /path/r53_zones.json --random-sleep
+# ./route53_ddns.rb -s /path/r53_secrets.json -z /path/r53_zones.json -b
 
 require 'rubygems'
 require 'curb'
@@ -30,6 +31,7 @@ require 'json'
 require 'optparse'
 require 'ostruct'
 require 'route53'
+require 'awesome_print'
 
 # Route53 endpoint
 $ENDPOINT = 'https://route53.amazonaws.com/'
@@ -167,12 +169,8 @@ def get_A_record (r53, hzid)
   end
 
   records = the_zone[0].get_records('A')
-  if (records.size() != 1)
-    puts "It is assumed that only one A record exists in Hosted Zone to update"
-    exit 1
-  end
-
-  records[0]
+  # return an array to iterate through update() calls
+  return records
 end
 
 #TODO support mail records in the format of '10 subdomain.domain.tld', e.g., mail.example.com
@@ -189,10 +187,9 @@ def get_MX_record (r53, hzid)
   records = the_zone[0].get_records('MX')
   if (records.size() != 1)
     puts "It is assumed that only one MX record exists in Hosted Zone to update"
-    exit 1
   end
 
-  records[0]
+  return records[0]
 end
 
 def get_CNAME_record (r53, hzid)
@@ -216,26 +213,33 @@ end
 # or prone to invalidation issues. One request per 5 minutes shall
 # not be a problem
 def get_previous_ip(r53, hzid)
-    get_A_record(r53, hzid).values[0]
+    a_rec = get_A_record(r53, hzid).first
+    ap(a_rec)
+    return a_rec
 end
 
 def update_ip (r53, hzid, ip)
 
   #get_<type>_record calls will return nil if the hosted zone ID is not found.
-  puts "Updating zone A record."
+  puts "Updating zone A record(s)."
   a_rec = get_A_record(r53, hzid)
-  a_rec.update(nil, nil, nil, [ip]) unless a_rec.nil?
-  
-  puts "Updating zone MX record."
-  mx_rec = get_MX_record(r53, hzid)
-  mx_rec.update(nil, nil, nil, ["10 #{ip}"]) unless mx_rec.nil?
-
-  puts "Updating zone CNAME (e.g., subdomain alias or wildcard '*.domain.tld') record"
-  cname_rec = get_CNAME_record(r53, hzid)
-  # iterate through the array of CNAME records
-  cname_rec.each do |rec|
-    rec.update(nil, nil, nil, [ip]) unless cname_rec.nil?
+  a_rec.each do |rec|
+    # discriminate here between ALIAS and ordinary A recs
+    rec.update(nil, nil, nil, [ip]) unless a_rec.nil? || !rec.zone_apex.nil?
   end
+
+  # TODO: root domain name on the right-hand side
+  #puts "Updating zone MX record."
+  #mx_rec = get_MX_record(r53, hzid)
+  #mx_rec.update(nil, nil, nil, ["10 #{ip}"]) unless mx_rec.nil?
+
+  puts "Updating zone CNAME (e.g., subdomain alias or wildcard '*.domain.tld') record(s)"
+  # TODO: root domain name on the right-hand side
+  #cname_rec = get_CNAME_record(r53, hzid)
+  # iterate through the array of CNAME records
+  #cname_rec.each do |rec|
+  #  rec.update(nil, nil, nil, [ip]) unless cname_rec.nil?
+  #end
 end
 
 options = get_cli_options(ARGV)
@@ -264,17 +268,18 @@ secrets = JSON.parse(File.read(options.secrets_file))
 zones = JSON.parse(File.read(options.hosted_zones))
 
 puts "Updating these hosted zones:"
-puts zones
+ap(zones)
 
 r53 = Route53::Connection.new(secrets["access_key"], secrets["secret_key"], $API_VERSION, $ENDPOINT)
 
 zones.each_pair do |key, value|
 
+  puts "getting previous IP for #{key}"
   previous_ip = get_previous_ip(r53, value)
   puts "#{key} IP was #{previous_ip}"
 
   if previous_ip == my_ip
-    puts "Nothing to do."
+    puts "No change."
   else
     puts "Updating IP of #{key} with Route53"
     update_ip(r53, value, my_ip)
