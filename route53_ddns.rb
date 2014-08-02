@@ -19,7 +19,7 @@
 #  "name":"ZONE_ID",
 #  "name":"ZONE_ID"
 #}
-# the name label is purely cosmetic and for logging purposes.
+# the name label should be the root domain for setting MX properly (needs FQDN on the right-side, not IPv4 address quad).
 #
 # launch parameters:
 # ./route53_ddns.rb --secrets-file /path/r53_secrets.json --hosted-zones /path/r53_zones.json --random-sleep
@@ -101,11 +101,6 @@ end
 # Amazon AWS one shall be enough though
 def get_my_ip
   ip_providers = [
-    {
-      'url' => 'http://whatismyip.org/',
-      'method'  =>  lambda { |x| x },
-      'validate' => lambda { |x| x =~ /^([\d]{1,3}\.){3}[\d]{1,3}$/ }
-    },
     {
       'url' => 'http://strewth.org/ip.php',
       'method' => lambda { |x| JSON.parse(x)['ipaddress']; },
@@ -218,28 +213,30 @@ def get_previous_ip(r53, hzid)
     return a_rec
 end
 
-def update_ip (r53, hzid, ip)
+def update_ip (r53, dns_name, hzid, ip)
 
   #get_<type>_record calls will return nil if the hosted zone ID is not found.
   puts "Updating zone A record(s)."
   a_rec = get_A_record(r53, hzid)
   a_rec.each do |rec|
-    # discriminate here between ALIAS and ordinary A recs
+    # use zone_apex to discriminate here between ALIAS and ordinary A records
     rec.update(nil, nil, nil, [ip]) unless a_rec.nil? || !rec.zone_apex.nil?
   end
+  
+  puts "Updating zone MX record to point to #{dns_name}."
+  # root domain name on the right-hand side of an MX record
+  mx_rec = get_MX_record(r53, hzid)
+  puts "found: #{mx_rec}"
+  mx_rec.update(nil, nil, nil, ["10 #{dns_name}"]) unless mx_rec.nil?
 
-  # TODO: root domain name on the right-hand side
-  #puts "Updating zone MX record."
-  #mx_rec = get_MX_record(r53, hzid)
-  #mx_rec.update(nil, nil, nil, ["10 #{ip}"]) unless mx_rec.nil?
-
-  puts "Updating zone CNAME (e.g., subdomain alias or wildcard '*.domain.tld') record(s)"
-  # TODO: root domain name on the right-hand side
-  #cname_rec = get_CNAME_record(r53, hzid)
+  puts "Updating zone CNAME (e.g., subdomain alias or wildcard '*.domain.tld') record(s) to point to #{dns_name}."
+  # root domain name on the right-hand side of a CNAME record
+  cname_rec = get_CNAME_record(r53, hzid)
   # iterate through the array of CNAME records
-  #cname_rec.each do |rec|
-  #  rec.update(nil, nil, nil, [ip]) unless cname_rec.nil?
-  #end
+  cname_rec.each do |rec|
+    puts "found: #{rec}"
+    rec.update(nil, nil, nil, ["#{dns_name}"]) unless cname_rec.nil?
+  end
 end
 
 options = get_cli_options(ARGV)
@@ -282,7 +279,7 @@ zones.each_pair do |key, value|
     puts "No change."
   else
     puts "Updating IP of #{key} with Route53"
-    update_ip(r53, value, my_ip)
+    update_ip(r53, key, value, my_ip)
     puts "Done."
   end
 end
