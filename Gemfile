@@ -1,4 +1,4 @@
 source "http://rubygems.org"
-gem "route53", "~> 0.2.1"
+gem "route53", "~> 0.4.0"
 gem "curb"
 gem "json"
