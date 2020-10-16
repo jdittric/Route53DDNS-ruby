@@ -1,13 +1,15 @@
 GEM
   remote: http://rubygems.org/
   specs:
-    builder (3.0.0)
+    builder (3.2.4)
     curb (0.8.0)
-    hpricot (0.8.6)
     json (1.6.6)
-    route53 (0.2.1)
+    mini_portile2 (2.4.0)
+    nokogiri (1.10.10)
+      mini_portile2 (~> 2.4.0)
+    route53 (0.4.0)
       builder
-      hpricot
+      nokogiri
       ruby-hmac
     ruby-hmac (0.4.0)
 
@@ -17,4 +19,4 @@ PLATFORMS
 DEPENDENCIES
   curb
   json
-  route53 (~> 0.2.1)
+  route53 (~> 0.4.0)
